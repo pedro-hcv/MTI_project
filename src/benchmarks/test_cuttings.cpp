@@ -269,7 +269,7 @@
 	double mu_friction = 0.35;
 	double fillet_radius = 5e-6;
 	tool *t = new tool(tl, length_tool, height_tool, rake, clear, fillet_radius, mu_friction);
-
+	
 	double target_feed = 1e-4;	// 0.1 mm
 	double current_feed = hi_y - t->low();
 	double dist_to_target_feed = fabs(current_feed - target_feed);
@@ -278,7 +278,7 @@
 	t->set_vel(glm::dvec2(0.,vc));
 	t->update_tool(correction_time*sign);
 	t->set_vel(glm::dvec2(vc, 0.)); // set actual velocity
-
+	//t->print("tool.txt");
 	// save settings to body
 	b->set_plasticity(plast);
 	if (thermal_conduction) b->set_thermal(trml);

@@ -49,7 +49,7 @@
  */
 
 #include "vtk_writer.h"
-
+#include <iomanip>
 void vtk_writer_write(const std::vector<particle> &particles, unsigned int step, const char *folder) {
 	char buf[256];
 	sprintf(buf, "%s/out_%06d.vtk", folder, step);
@@ -155,34 +155,39 @@ void vtk_writer_write(const tool* tool, unsigned int step, const char *folder) {
 
 	//mesh tool "body"
 	if (segments.size() == 4) {
-        triangles.push_back(triangle(segments[0].left, segments[0].right, segments[1].right));
-        triangles.push_back(triangle(segments[2].left, segments[2].right, segments[3].right));
-	} else if (segments.size() == 5) {
-        triangles.push_back(triangle(segments[0].left, segments[0].right, segments[2].right));
-        triangles.push_back(triangle(segments[1].left, segments[1].right, segments[2].right));
-        triangles.push_back(triangle(segments[3].left, segments[3].right, segments[4].right));
-	}
+        triangles.push_back(triangle(segments[0].initial_vector, segments[0].right, segments[1].right));
+        triangles.push_back(triangle(segments[2].initial_vector, segments[2].right, segments[3].right));
+	} else if (segments.size() == 5 && tool->get_fillet() != 0) {
 
-	//mesh fillet
-	if (tool->get_fillet() != 0) {
-		const int num_discr = 20;
+        //triangles.push_back(triangle(segments[0].initial_vector, segments[1].initial_vector, segments[3].initial_vector));
+        //triangles.push_back(triangle(segments[1].initial_vector, segments[2].initial_vector, segments[3].initial_vector));
+        //triangles.push_back(triangle(segments[3].initial_vector, segments[4].initial_vector, segments[0].initial_vector));
+		const int num_discr = 40;
 		auto fillet = tool->get_fillet();
-		double t1 = fmin(fillet->t1, fillet->t2);
-		double t2 = fmax(fillet->t1, fillet->t2);
+		//double t1 = fmin(fillet->t1, fillet->t2);
+		//double t2 = fmax(fillet->t1, fillet->t2);
+		double t1 = fillet->t1;
+		double t2 = fillet->t2;
 
-		double lo = t1 - 0.1*t1;
+		triangles.push_back(triangle(segments[0].initial_vector, segments[1].initial_vector, segments[2].initial_vector));
+        triangles.push_back(triangle(segments[0].initial_vector, segments[2].initial_vector, fillet->p));
+        triangles.push_back(triangle(segments[0].initial_vector, fillet->p, segments[3].initial_vector));
+		triangles.push_back(triangle(segments[0].initial_vector, segments[3].initial_vector, segments[4].initial_vector));
+   
+   		//double lo = t1 - 0.1*t1;
+		//std::cout <<;
 
-		double d_angle = (t2-t1)/(num_discr-1);
+		double d_angle = abs((2*M_PI - abs(t2-t1)))/(num_discr);
 
 		double r = fillet->r;
 
 		for (int i = 0; i < num_discr-1; i++) {
-			double angle_1 = lo + (i+0)*d_angle;
-			double angle_2 = lo + (i+1)*d_angle;
+			double angle_1 = t2 + (i+0)*d_angle;
+			double angle_2 = t2 + (i+1)*d_angle;
 
 			glm::dvec2 p1 = glm::dvec2(fillet->p.x, fillet->p.y);
-			glm::dvec2 p2 = glm::dvec2(p1.x + r*sin(angle_1), p1.y + r*cos(angle_1));
-			glm::dvec2 p3 = glm::dvec2(p1.x + r*sin(angle_2), p1.y + r*cos(angle_2));
+			glm::dvec2 p2 = glm::dvec2(p1.x + r*cos(angle_1), p1.y + r*sin(angle_1));
+			glm::dvec2 p3 = glm::dvec2(p1.x + r*cos(angle_2), p1.y + r*sin(angle_2));
 			triangles.push_back(triangle(p1, p2, p3));
 		}
 	}
@@ -193,7 +198,7 @@ void vtk_writer_write(const tool* tool, unsigned int step, const char *folder) {
 	sprintf(buf, "%s/tool_%06d.vtk", folder, step);
 	FILE *fp = fopen(buf, "w+");
 
-	fprintf(fp, "# vtk DataFile Version 2.0\n");
+	fprintf(fp, "# vtk DataFile Version 3.0\n");
 	fprintf(fp, "mfree iwf\n");
 	fprintf(fp, "ASCII\n");
 	fprintf(fp, "\n");
@@ -207,7 +212,7 @@ void vtk_writer_write(const tool* tool, unsigned int step, const char *folder) {
 	}
 	fprintf(fp, "\n");
 
-	fprintf(fp, "CELLS %d %d\n", num_tri, 3*num_tri + num_tri);
+	fprintf(fp, "CELLS %d %d\n", num_tri, 4*num_tri);
 	for (int i = 0; i < num_tri; i++) {
 		fprintf(fp, "3 %d %d %d\n", 3*i+0, 3*i+1, 3*i+2);
 	}

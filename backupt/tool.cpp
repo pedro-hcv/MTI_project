@@ -1,11 +1,60 @@
-# include "tool.h"
+/*
+ * ================================================
+ * 					COPYRIGHT:
+ * Institute of Machine Tools & Manufacturing (IWF)
+ * Department of Mechanical & Process Engineering
+ * 					ETH ZURICH
+ * ================================================
+ *
+ *  This file is part of "mfree_iwf-ul-cut-refine".
+ *
+ * 	mfree_iwf is free software: you can redistribute it and/or modify
+ *	it under the terms of the GNU General Public License as published by
+ *	the Free Software Foundation, either version 3 of the License, or
+ *	(at your option) any later version.
+ *
+ *	mfree_iwf-ul-cut-refine is distributed in the hope that it will be useful,
+ *	but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *	GNU General Public License for more details.
+ *
+ *	You should have received a copy of the GNU General Public License
+ *  along with mfree_iwf-ul-cut-refine.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *	~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *
+ *  This is the source code used to produce the results
+ *  of the metal cutting simulation presented in:
+ *
+ *  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *  "Meshfree Simulation of Metal Cutting:
+ *  An Updated Lagrangian Approach with Dynamic Refinement"
+ *
+ * 	Authored by:
+ * 	Mohamadreza Afrasiabi
+ * 	Dr. Matthias Roethlin
+ * 	Hagen Klippel
+ * 	Prof. Dr. Konrad Wegener
+ *
+ * 	Published by:
+ * 	International Journal of Mechanical Sciences
+ * 	28 June 2019
+ * 	https://doi.org/10.1016/j.ijmecsci.2019.06.045
+ *  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *
+ * 	For further descriptions, you may refer to the manuscript
+ * 	or the previous works of the same research group
+ * 	at IWF, ETH Zurich.
+ *
+ */
 
+#include "tool.h"
 
-static glm::dvec2 solve_quad(double a, double b, double c){
-    double x1 = (-b + sqrt(b*b - 4*a*c))/(2*a);
-    double x2 = (-b - sqrt(b*b - 4*a*c))/(2*a);
-    
-    return glm::dvec2(x1, x2);
+static glm::dvec2 solve_quad(double a, double b, double c) {
+	double x1 = (-b + sqrt(b*b-4*a*c))/(2*a);
+	double x2 = (-b - sqrt(b*b-4*a*c))/(2*a);
+
+	return glm::dvec2(x1,x2);
 }
 
 static double myatan2(double y, double x) {
@@ -19,65 +68,69 @@ static double myatan2(double y, double x) {
 
 glm::dvec2 tool::line::closest_point(glm::dvec2 xq) const {
 
-	double t_location = ((xq.x - initial_vector.x)*parallel_vector.x + (xq.y - initial_vector.y)*parallel_vector.y)/(parallel_vector.x*parallel_vector.x + parallel_vector.y*parallel_vector.y);
-	double px = parallel_vector.x*t_location + initial_vector.x; 
-	double py = parallel_vector.y*t_location + initial_vector.y; 
+	if (vertical) {
+		return glm::dvec2(b, xq.y);
+	}
+
+	double bb = -1;
+
+	double cc = b;
+	double aa = a;
+
+	double px = (bb*( bb*xq.x - aa*xq.y) - aa*cc)/(aa*aa + bb*bb);
+	double py = (aa*(-bb*xq.x + aa*xq.y) - bb*cc)/(aa*aa + bb*bb);
+
 	return glm::dvec2(px, py);
 }
 
-
-// TODO intersect lines:
 glm::dvec2 tool::line::intersect(tool::line l) const {
 
 	// parallel vertical lines
-	if (abs(parallel_vector.x*l.parallel_vector.y - parallel_vector.y*l.parallel_vector.x) < 1e-12){
+	if (vertical && l.vertical) {
 		return glm::dvec2(DBL_MAX, DBL_MAX);
 	}
-	else if (parallel_vector.x == 0){
-		double s = (initial_vector.x - l.initial_vector.x)/parallel_vector.x;
-		double x = (s*l.parallel_vector.x) + l.initial_vector.x;
-		double y = (s*l.parallel_vector.y) + l.initial_vector.y;
-		return glm::dvec2(x, y);
-	}
-	else{
-		double s = (l.initial_vector.y - initial_vector.y - (parallel_vector.y/parallel_vector.x)*(l.initial_vector.x - initial_vector.x))/((parallel_vector.y/parallel_vector.x)*l.parallel_vector.x - l.parallel_vector.y);
-		double x = (s*l.parallel_vector.x) + l.initial_vector.x;
-		double y = (s*l.parallel_vector.y) + l.initial_vector.y;
-		return glm::dvec2(x, y);
+
+	// parallel but not vertical lines
+	if (fabs(a-l.a) < 1e-12) {
+		return glm::dvec2(DBL_MAX, DBL_MAX);
 	}
 
+	if (vertical) {
+		double vert_x = b;
+		double inter_y = l.a*vert_x + l.b;
+		return glm::dvec2(vert_x, inter_y);
+	}
+
+	if (l.vertical)  {
+		double vert_x = l.b;
+		double inter_y = a*vert_x + b;
+		return glm::dvec2(vert_x, inter_y);
+	}
+
+	double x = (l.b-b)/(a-l.a);
+	double y = a*x+b;
+	return glm::dvec2(x,y);
 }
 
-double tool::line::angle_between_lines(tool::line l) const{
-	return acos(glm::dot(parallel_vector,l.parallel_vector)/(glm::length(parallel_vector)*glm::length(l.parallel_vector)));;
-}
-
-
-double tool::line::get_length() const{
-	return length;
-}
+tool::line::line(double a, double b, bool vertical) : a(a), b(b), vertical(vertical) {}
 
 tool::line::line() {}
 
 tool::line::line(glm::dvec2 p1, glm::dvec2 p2) {
-	parallel_vector.x = p2.x - p1.x;
-	parallel_vector.y = p2.y - p1.y;
+	double Mxx = p1.x; double Mxy = 1.;
+	double Myx = p2.x; double Myy = 1.;
 
-	initial_vector = p1;
+	double detM = Mxx*Myy - Mxy*Myx;
 
-}
-
-tool::line::line(glm::dvec2 p1, glm::dvec2 p2, bool segment):segment(segment) {
-	parallel_vector.x = p2.x - p1.x;
-	parallel_vector.y = p2.y - p1.y;
-
-	initial_vector = p1;
-
-	if (segment){
-		length = glm::length(p2-p1);
-		limits = glm::dvec2(0,1);
+	if (fabs(detM) < 1e-12) {	//vertical line
+		vertical = true;
+		a = DBL_MAX;
+		b = p1.x;	//or p2.x
+		return;
 	}
 
+	a = (p1.y*Myy - Mxy*p2.y)/detM;
+	b = (p2.y*Mxx - Myx*p1.y)/detM;
 }
 
 bool tool::bbox::in(glm::dvec2 qp) {
@@ -105,6 +158,24 @@ tool::bbox::bbox(glm::dvec2 p1, glm::dvec2 p2) {
 tool::bbox::bbox(double bbmin_x, double bbmax_x, double bbmin_y, double bbmax_y) :
 				bbmin_x(bbmin_x), bbmax_x(bbmax_x), bbmin_y(bbmin_y), bbmax_y(bbmax_y) {}
 
+tool::segment::segment(glm::dvec2 left, glm::dvec2 right) {
+	this->left  = left;
+	this->right = right;
+
+	glm::dvec2 dist = right - left;
+	glm::dvec2 n(dist.y, -dist.x);
+	n = glm::normalize(n);
+
+	this->n = n;
+	this->l = tool::line(left,right);
+}
+
+
+double tool::segment::length() const {
+	return glm::length(left-right);
+}
+
+tool::segment::segment() {}
 
 tool::circle_segment::circle_segment(double r, double t1, double t2, glm::dvec2 p) : r(r), t1(t1), t2(t2), p(p) {}
 
@@ -123,7 +194,7 @@ tool::circle_segment::circle_segment(glm::dvec2 p1, glm::dvec2 p2, glm::dvec2 p3
 	r = glm::length(p-p1);
 }
 
-/* unsigned int tool::circle_segment::intersect(glm::dvec2 p1, glm::dvec2 p2, glm::dvec2 &out_i1, glm::dvec2 &out_i2) {
+unsigned int tool::circle_segment::intersect(glm::dvec2 p1, glm::dvec2 p2, glm::dvec2 &out_i1, glm::dvec2 &out_i2) {
 	//c.f. http://stackoverflow.com/questions/1073336/circle-line-segment-collision-detection-algorithm
 	// answer by @multitaskPro w/ comments by @Duq
 
@@ -187,42 +258,46 @@ tool::circle_segment::circle_segment(glm::dvec2 p1, glm::dvec2 p2, glm::dvec2 p3
 
 	assert(0);
 	return -1;	//unreachable
-} */
+}
 
 tool::circle_segment::circle_segment() {}
 
-
-
 double tool::circle_segment::distance(glm::dvec2 qp) const {
+	double Ax = p.x;
+	double Ay = p.y;
 
-	double t = myatan2(qp.y - p.y, qp.x - p.x); 
+	double Bx = qp.x;
+	double By = qp.y;
+
+	double Cx = Ax + r*(Bx-Ax)/sqrt((Bx-Ax)*(Bx-Ax)+(By-Ay)*(By-Ay));
+	double Cy = Ay + r*(By-Ay)/sqrt((Bx-Ax)*(Bx-Ax)+(By-Ay)*(By-Ay));
+
+	glm::dvec2 cp(Cx, Cy);
+	double t = myatan2(p.y-cp.y, p.x-cp.x);
 
 	bool valid = t > fmin(t1,t2) && t < fmax(t1,t2);
 
 	if (valid) {
-		return sqrt((p.x + r*(cos(t)) - qp.x)*(p.x + r*(cos(t)) - qp.x) + (p.y + r*(sin(t)) - qp.y)*(p.y + r*(sin(t)) - qp.y));
+		return glm::length(cp-qp);
 	} else {
 		return DBL_MAX;
 	}
-	//glm::dvec2 cross();
 }
 
 glm::dvec2 tool::fit_fillet(double r, tool::line lm, tool::line l1) const {
+	double A0 = lm.a;
+	double B0 = lm.b;
 
-	glm::dvec2 intersec = lm.intersect(l1);
-	//double gamma = acos();
-	// angle between lines:
-	double alpha = lm.angle_between_lines(l1);
-	double xm = intersec.x - r;
-	double ym = intersec.y + (r/tan(alpha/2));
-	double gamma = acos((-lm.parallel_vector.y)/(glm::length(lm.parallel_vector)));
-	
-	if (gamma > 1e-6){
-		double dum_x = xm;
-		double dum_y = ym;
-		xm = dum_x*cos(gamma) - dum_y*sin(gamma);  
-		ym = dum_x*sin(gamma) + dum_y*cos(gamma); 
-	}
+	double a = l1.a;
+	double b = l1.b;
+
+	double A = a-A0;
+	double B = b-B0;
+	double C = r*sqrt(a*a+1.);
+
+	glm::dvec2 sol = solve_quad(A*A, 2*A*B, B*B-C*C);
+	double xm = fmin(sol.x, sol.y);
+	double ym = lm.a*xm + lm.b;
 	return glm::dvec2(xm, ym);
 }
 
@@ -231,8 +306,8 @@ void tool::construct_segments(std::vector<glm::dvec2> list_p) {
 	for (unsigned int i = 0; i < n; i++) {
 		unsigned int cur  = i;
 		unsigned int next = (cur+1 > n-1) ? 0 : i+1;
-		m_segments.push_back(line(list_p[cur], list_p[next]));
-		//m_segments[i].left = m
+		m_segments.push_back(segment(list_p[cur], list_p[next]));
+
 		//		printf("lft: %f %f\n", m_segments[i].left.x, m_segments[i].left.y);
 		//		printf("rgt: %f %f\n", m_segments[i].right.x, m_segments[i].right.y);
 		//		printf("nrm: %f %f\n", m_segments[i].n.x, m_segments[i].n.y);
@@ -241,90 +316,48 @@ void tool::construct_segments(std::vector<glm::dvec2> list_p) {
 	}
 }
 
-
 std::vector<glm::dvec2> tool::construct_points_and_fillet(glm::dvec2 tl, glm::dvec2 tr, glm::dvec2 br, glm::dvec2 bl, double r) {
+	// construct line halfing the space between l1, l2 => lm
+	glm::dvec2 pm = br;
+	glm::dvec2 nt = tr - br;
+	glm::dvec2 nl = bl - br;
+
+	nt = glm::normalize(nt);
+	nl = glm::normalize(nl);
+
+	glm::dvec2 nm = 0.5*(nt+nl);
+	nm = glm::normalize(nm);
+
+	line lm(pm, pm+nm);
 
 	// find center of fillet => p
 	line l1(tr, br);
 	line l2(bl, br);
-	glm::dvec2 p = fit_fillet(r, l1, l2); // fit_fillet(r, lm, l2) would work too
+	glm::dvec2 p = fit_fillet(r, lm, l1); // fit_fillet(r, lm, l2) would work too
 
 	// find points on l1, l2 that meet the fillet => trc, blc (c = "continued")
 	glm::dvec2 trc = l1.closest_point(p);
 	glm::dvec2 blc = l2.closest_point(p);
 
-	double alpha = l1.angle_between_lines(l2);
-
 	// construct circle segment
-	double t1 = myatan2(trc.y - p.y, trc.x - p.x);
-	double t2 = myatan2(blc.y - p.y, blc.x - p.x);
+	double t1 = myatan2(p.y - trc.y, p.x - trc.x);
+	double t2 = myatan2(p.y - blc.y, p.x - blc.x);
 	m_fillet = new circle_segment(r, t1, t2, p);
 
 	return std::vector<glm::dvec2>({tl, tr, trc, blc, bl});
 }
 
-
-double tool::inside(glm::dvec2 qp) const {
-
-	if (m_chamfer_debug) {
-		bool in = glm::length(m_fillet->p - qp) < m_fillet->r;
-		if (!in) return -1.;
-		return m_fillet->distance(qp);
-	}
-
-	bool in = false;
-
-	//determine if point is in polygon
-	int i, j;
-    for (i = 0, j = m_segments.size()-1; i < m_segments.size(); j = i++) {
-      if ((((m_segments[i].initial_vector.y <= qp.y) && (qp.y < m_segments[j].initial_vector.y)) ||
-    	  ((m_segments[j].initial_vector.y <= qp.y) && (qp.y < m_segments[i].initial_vector.y))) &&
-          (qp.x < (m_segments[j].initial_vector.x - m_segments[i].initial_vector.x) * (qp.y - m_segments[i].initial_vector.y) / (m_segments[j].initial_vector.y - m_segments[i].initial_vector.y) + m_segments[i].initial_vector.x))
-        in = !in;
-    	}
-    
-
-	//if fillet is present, qp can also fall into the fillet, so let's check
-	if (m_fillet) {
-		in = in || glm::length(m_fillet->p - qp) < m_fillet->r;
-	}
-
-	//return a dummy value if qp is not inside
-	if (!in) return -1.;
-
-	double r = DBL_MAX;
-
-	for (unsigned int i = 0; i < m_segments.size(); i++) {
-		double d;
-		if (m_fillet && i==2) {					//if there is a fillet present, its always covering the second segment
-			d = m_fillet->distance(qp);
-		} else {
-			glm::dvec2 p = m_segments[i].closest_point(qp);
-			d = glm::length(p-qp);
-		}
-
-		r = fmin(r, d);
-	}
-
-	if (r == 0.) {
-		printf("WARNING: point on tool! visibility test unreliable, nudge tool!\n");
-	}
-
-	return r;
-}
-
-
 glm::dvec2 tool::project(glm::dvec2 qp) const {
 	assert(inside(qp) >= 0.);
 
-	const double nudge = 1e-8;	//TODO: make proportional to dx?
+		const double nudge = 1e-8;	//TODO: make proportional to dx?
 //	const double nudge = 0.0001;
 
 	double min_dist = DBL_MAX;
 	glm::dvec2 proj;
 
 	unsigned int seg_number = 0;
-	for (auto it = 0; it != m_segments.size(); it++) {
+	for (auto it = m_segments.begin(); it != m_segments.end(); ++it) {
 
 		//TODO
 		if (m_chamfer_debug && (seg_number != 2)) {
@@ -338,12 +371,11 @@ glm::dvec2 tool::project(glm::dvec2 qp) const {
 			if (dist < min_dist) {
 				glm::dvec2 dist_vec = glm::normalize(qp-m_fillet->p)*(m_fillet->r+nudge);
 				proj = dist_vec + m_fillet->p;
-				proj += nudge*glm::normalize(dist_vec);
 				min_dist = dist;
 			}
 		} else {
 
-			glm::dvec2 proj_candidate = m_segments[it].closest_point(qp);
+			glm::dvec2 proj_candidate = it->l.closest_point(qp);
 			glm::dvec2 n = proj_candidate - qp;
 			double dist = glm::length(n);
 
@@ -377,29 +409,73 @@ glm::dvec2 tool::project(glm::dvec2 qp) const {
 	return proj;
 }
 
+bool tool::intersect(glm::dvec2 p1, glm::dvec2 p2) const {
+	double dummy;
+	return intersect(p1, p2, dummy);
+}
+
+bool tool::intersect(glm::dvec2 p1, glm::dvec2 p2, double &r) const {
+
+	r = 0.;
+
+	// ill defined cases should p1 or p2 be inside
+	//		project them out!
+	if (inside(p1) > 0.) {
+		p1 = project(p1);
+	}
+
+	if (inside(p2) > 0.) {
+		p2 = project(p2);
+	}
+
+	tool::line ray(p1,p2);
+	tool::bbox ray_box(p1,p2);
+
+	// check segments
+	if (!m_chamfer_debug) {
+		for (auto it = m_segments.begin(); it != m_segments.end(); ++it) {
+
+			glm::dvec2 inter = it->l.intersect(ray);			//TODO: is this true?
+			tool::bbox seg_box(it->left, it->right);
+
+			if (ray_box.in(inter) && seg_box.in(inter)) {
+				return true;
+			}
+		}
+	}
+
+	// check fillet
+	if (m_fillet) {
+		glm::dvec2 i1,i2;
+		unsigned int num_inter = m_fillet->intersect(p1, p2, i1, i2);
+
+		if (num_inter == 0) return false;
+		if (num_inter == 1 && ray_box.in(i1)) return true;
+		if (num_inter == 2 && ray_box.in(i1) && ray_box.in(i2)) {
+			r = glm::length(i1-i2);
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void tool::get_chamfer_data(glm::dvec2 &p, double &r) const {
 	p.x = m_fillet->p.x;
 	p.y = m_fillet->p.y;
 	r   = m_fillet->r;
 }
 
-//////////////////////////////////////////////////////
 tool::bbox tool::safe_bb(double safety) const {
 
 	double x_min = DBL_MAX; double x_max = -DBL_MAX;
 	double y_min = DBL_MAX; double y_max = -DBL_MAX;
 
-	/* for (auto it = m_segments.begin(); it != m_segments.end(); ++it) {
+	for (auto it = m_segments.begin(); it != m_segments.end(); ++it) {
 		x_min = fmin(it->left.x, x_min);
 		x_max = fmax(it->left.x, x_max);
 		y_min = fmin(it->left.y, y_min);
 		y_max = fmax(it->left.y, y_max);
-	} */
-	for (auto it = 0; it != m_segments.size(); it++) {
-		x_min = fmin(m_segments[it].initial_vector.x, x_min);
-		x_max = fmax(m_segments[it].initial_vector.x, x_max);
-		y_min = fmin(m_segments[it].initial_vector.y, y_min);
-		y_max = fmax(m_segments[it].initial_vector.y, y_max);
 	}
 
 	if (m_fillet) {
@@ -433,26 +509,64 @@ double tool::low() const {
 	return y_min;
 }
 
-//////////////////////////////////////////////////////
+double tool::inside(glm::dvec2 qp) const {
 
-bool tool::contact(glm::dvec2 qp, double &depth, glm::dvec2 &dir) const {
-	bool in = false;
+	if (m_chamfer_debug) {
+		bool in = glm::length(m_fillet->p - qp) < m_fillet->r;
+		if (!in) return -1.;
+		return m_fillet->distance(qp);
+	}
+
+	bool in = true;
 
 	//determine if point is in polygon
-	int i, j;
-    for (i = 0, j = m_segments.size()-1; i < m_segments.size(); j = i++) {
-      if ((((m_segments[i].initial_vector.y <= qp.y) && (qp.y < m_segments[j].initial_vector.y)) ||
-    	  ((m_segments[j].initial_vector.y <= qp.y) && (qp.y < m_segments[i].initial_vector.y))) &&
-          (qp.x < (m_segments[j].initial_vector.x - m_segments[i].initial_vector.x) * (qp.y - m_segments[i].initial_vector.y) / (m_segments[j].initial_vector.y - m_segments[i].initial_vector.y) + m_segments[i].initial_vector.x))
-        in = !in;
-    	}
-    
+	for (auto it = m_segments.begin(); it != m_segments.end(); ++it) {
+		in = in && glm::dot(it->left - qp,it->n) < 0;		//it->right would work too
+	}
 
 	//if fillet is present, qp can also fall into the fillet, so let's check
 	if (m_fillet) {
 		in = in || glm::length(m_fillet->p - qp) < m_fillet->r;
 	}
 
+	//return a dummy value if qp is not inside
+	if (!in) return -1.;
+
+	double r = DBL_MAX;
+
+	for (unsigned int i = 0; i < m_segments.size(); i++) {
+		double d;
+		if (m_segments[i].l.vertical) {
+			d = fabs(m_segments[i].left.x - qp.x);		//right would work too
+		} else if (m_fillet && i==2) {					//if there is a fillet present, its always covering the second segment
+			d = m_fillet->distance(qp);
+		} else {
+			glm::dvec2 p = m_segments[i].l.closest_point(qp);
+			d = glm::length(p-qp);
+		}
+
+		r = fmin(r, d);
+	}
+
+	if (r == 0.) {
+		printf("WARNING: point on tool! visibility test unreliable, nudge tool!\n");
+	}
+
+	return r;
+}
+
+bool tool::contact(glm::dvec2 qp, double &depth, glm::dvec2 &dir) const {
+	bool in = true;
+
+	//determine if point is in polygon
+	for (auto it = m_segments.begin(); it != m_segments.end(); ++it) {
+		in = in && glm::dot(it->left - qp, it->n) < 0.;		//it->right would work too
+	}
+
+	//if fillet is present, qp can also fall into the fillet, so let's check
+	if (m_fillet) {
+		in = in || glm::length(m_fillet->p - qp) < m_fillet->r;
+	}
 
 	if (!in) return false;
 
@@ -460,18 +574,24 @@ bool tool::contact(glm::dvec2 qp, double &depth, glm::dvec2 &dir) const {
 
 	for (unsigned int i = 0; i < m_segments.size(); i++) {
 		double d;
-		if (m_fillet && i==2) {					//if there is a fillet present, its always covering the second segment
+		if (m_segments[i].l.vertical) {
+			d = fabs(m_segments[i].left.x - qp.x);		//right would work too
+			if (d < depth) {
+				depth = d;
+				dir = glm::dvec2(m_segments[i].left.x - qp.x, 0.);
+			}
+		} else if (m_fillet && i==2) {					//if there is a fillet present, its always covering the second segment
 			d = m_fillet->distance(qp);
 			if (d < depth) {
 				depth = d;
 				dir = glm::normalize(qp - m_fillet->p);
 			}
 		} else {
-			glm::dvec2 p = m_segments[i].closest_point(qp);
+			glm::dvec2 p = m_segments[i].l.closest_point(qp);
 			d = glm::length(p-qp);
 			if (d < depth) {
 				depth = d;
-				dir = glm::normalize(qp - p);
+				dir = -m_segments[i].n;
 			}
 		}
 	}
@@ -480,26 +600,23 @@ bool tool::contact(glm::dvec2 qp, double &depth, glm::dvec2 &dir) const {
 }
 
 bool tool::contact(glm::dvec2 qp, glm::dvec2 &cp, glm::dvec2 &n) const {
-	bool in = false;
+	bool in = true;
 
 	//determine if point is in polygon
-	int i, j;
-    for (i = 0, j = m_segments.size()-1; i < m_segments.size(); j = i++) {
-      if ((((m_segments[i].initial_vector.y <= qp.y) && (qp.y < m_segments[j].initial_vector.y)) ||
-    	  ((m_segments[j].initial_vector.y <= qp.y) && (qp.y < m_segments[i].initial_vector.y))) &&
-          (qp.x < (m_segments[j].initial_vector.x - m_segments[i].initial_vector.x) * (qp.y - m_segments[i].initial_vector.y) / (m_segments[j].initial_vector.y - m_segments[i].initial_vector.y) + m_segments[i].initial_vector.x))
-        in = !in;
-    	}
-    
+	for (auto it = m_segments.begin(); it != m_segments.end(); ++it) {
+		in = in && glm::dot(it->left - qp, it->n) < 0.;		//it->right would work too
+	}
 
-	//if fillet is present, qp can also fall into the fillet, so let's check
+//	if fillet is present, qp can also fall into the fillet, so let's check
 	if (m_fillet) {
 		in = in || glm::length(m_fillet->p - qp) < m_fillet->r;
 	}
 
+	if (m_chamfer_debug) {
+		in = glm::length(m_fillet->p - qp) < m_fillet->r;
+	}
 
 	if (!in) return false;
-
 	double depth = DBL_MAX;
 
 	for (unsigned int i = 0; i < m_segments.size(); i++) {
@@ -507,7 +624,15 @@ bool tool::contact(glm::dvec2 qp, glm::dvec2 &cp, glm::dvec2 &n) const {
 		if (m_chamfer_debug && i != 2) continue;
 
 		double d;
-		if (m_fillet && i==2) {					//if there is a fillet present, its always covering the third segment
+		if (m_segments[i].l.vertical) {
+			d = fabs(m_segments[i].left.x - qp.x);		//right would work too
+			if (d < depth) {
+				depth = d;
+
+				n  = glm::normalize(glm::dvec2(m_segments[i].left.x - qp.x, 0.));
+				cp = glm::dvec2(m_segments[i].left.x, qp.y);
+			}
+		} else if (m_fillet && i==2) {					//if there is a fillet present, its always covering the third segment
 			d = m_fillet->distance(qp);
 			if (d < depth) {
 				depth = d;
@@ -516,12 +641,12 @@ bool tool::contact(glm::dvec2 qp, glm::dvec2 &cp, glm::dvec2 &n) const {
 				cp = m_fillet->p + n*m_fillet->r;
 			}
 		} else {
-			glm::dvec2 p = m_segments[i].closest_point(qp);
+			glm::dvec2 p = m_segments[i].l.closest_point(qp);
 			d = glm::length(p-qp);
 			if (d < depth) {
 				depth = d;
 
-				n  = glm::normalize(qp - p);
+				n  = -m_segments[i].n;
 				cp = p;
 			}
 		}
@@ -538,11 +663,10 @@ void tool::update_tool() {
 }
 
 void tool::update_tool(double dt) {
-	for (auto it = 0; it != m_segments.size(); it++) {
-		//it->left  += dt*m_velocity;
-		//it->right += dt*m_velocity;
-		//it->l = line(it->left, it->right);
-		m_segments[it].initial_vector +=  dt*m_velocity;
+	for (auto it = m_segments.begin(); it != m_segments.end(); ++it) {
+		it->left  += dt*m_velocity;
+		it->right += dt*m_velocity;
+		it->l = line(it->left, it->right);
 	}
 
 	if (m_fillet) {
@@ -554,6 +678,7 @@ void tool::update_tool(double dt) {
 		it->y += dt*m_velocity.y;
 	}
 }
+
 
 void tool::set_vel(glm::dvec2 vel) {
 	m_velocity = vel;
@@ -576,8 +701,8 @@ glm::dvec2 tool::center() const {
 	double cy = 0.;
 
 	for (auto it = m_segments.begin(); it != m_segments.end(); ++it) {
-		cx += it->initial_vector.x;
-		cy += it->initial_vector.y;
+		cx += it->left.x;
+		cy += it->left.y;
 	}
 
 	cx /= m_segments.size();
@@ -587,10 +712,10 @@ glm::dvec2 tool::center() const {
 }
 
 void tool::print(FILE *fp) {
-	for (unsigned int it = 0; it < m_segments.size(); ++it) {
-		fprintf(fp, "%f %f\n", m_segments[it].initial_vector.x, m_segments[it].initial_vector.y);
+	for (auto it = m_segments.begin(); it != m_segments.end(); ++it) {
+		fprintf(fp, "%f %f\n", it->left.x, it->left.y);
 	}
-	fprintf(fp, "%f %f\n", m_segments.back().initial_vector.x, m_segments.back().initial_vector.y);
+	fprintf(fp, "%f %f\n", m_segments.back().right.x, m_segments.back().right.y);
 
 	fprintf(fp, "%f %f\n", m_fillet->p.x, m_fillet->p.y);
 	fprintf(fp, "%f %f\n", m_fillet->r, m_fillet->r);
@@ -608,7 +733,7 @@ void tool::print(unsigned int step, const char *folder_name) {
 
 	fprintf(fp, "%d\n", (int) m_segments.size());
 	for (auto it = m_segments.begin(); it != m_segments.end(); ++it) {
-		fprintf(fp, "%f %f\n", it->initial_vector.x, it->initial_vector.y);
+		fprintf(fp, "%f %f\n", it->left.x, it->left.y);
 	}
 
 	if (m_fillet) {
@@ -652,10 +777,9 @@ tool::tool(glm::dvec2 tl, double length, double height,
 	glm::dvec2 bl(tl.x, tl.y-height);
 
 	double alpha_rake = rake_angle * M_PI / 180.;
-	//double alpha_free = (180-90-clearance_angle) * M_PI / 180.;
-	double alpha_free = (clearance_angle) * M_PI / 180.;
+	double alpha_free = (180-90-clearance_angle) * M_PI / 180.;
 
-	/* glm::dmat2x2 rot_rake(cos(alpha_rake), -sin(alpha_rake), sin(alpha_rake), cos(alpha_rake));
+	glm::dmat2x2 rot_rake(cos(alpha_rake), -sin(alpha_rake), sin(alpha_rake), cos(alpha_rake));
 	glm::dmat2x2 rot_free(cos(alpha_free), -sin(alpha_free), sin(alpha_free), cos(alpha_free));
 
 	glm::dvec2 down(0., -1.);
@@ -666,10 +790,7 @@ tool::tool(glm::dvec2 tl, double length, double height,
 	tool::line l1(tr,trc);
 	tool::line l2(bl,blc);
 
-	glm::dvec2 br = l1.intersect(l2); */
-	glm::dvec2 br;
-	br.x = tr.x + tan(alpha_rake)*height;
-	br.y = bl.y - tan(alpha_free)*length;
+	glm::dvec2 br = l1.intersect(l2);
 
 	if (r == 0.) {
 		construct_segments(std::vector<glm::dvec2>({tl, tr, br, bl}));
@@ -681,7 +802,7 @@ tool::tool(glm::dvec2 tl, double length, double height,
 	construct_segments(points);
 }
 
-const std::vector<tool::line> &tool::get_segments() const {
+const std::vector<tool::segment> &tool::get_segments() const {
 	return m_segments;
 }
 
@@ -689,21 +810,37 @@ const tool::circle_segment *tool::get_fillet() const {
 	return m_fillet;
 }
 
-
 tool::tool(glm::dvec2 tl, double length, double height,
 		double rake_angle, double clearance_angle,
 		double mu_fric) : m_mu(mu_fric)  {
-	
+	//		// returns distance to circle segment if closest
+	//		// point falls between t1, t2
+	//		// return DBL_MAX otherwise
+	//		double distance(glm::dvec2 qp) const;
+	//
+	//		// intersect circle segment with line segment p1,p2
+	//		// returns: 0 if no intersection point falls between t1, t2 or p1,p2 misses segment completely
+	//		//          1 if one intersection point falls between t1, t2. i1 is set
+	//		//          2 if both intersection points fall between t1, t2. i1, i2 is set
+	//		unsigned int intersect(glm::dvec2 p1, glm::dvec2 p2, glm::dvec2 &i1, glm::dvec2 &i2);
 	glm::dvec2 tr(tl.x+length, tl.y);
 	glm::dvec2 bl(tl.x, tl.y-height);
 
 	double alpha_rake = rake_angle * M_PI / 180.;
-	double alpha_free = (clearance_angle) * M_PI / 180.;
+	double alpha_free = (180-90-clearance_angle) * M_PI / 180.;
 
-	glm::dvec2 br;
-	br.x = tr.x + tan(alpha_rake)*height;
-	br.y = bl.y - tan(alpha_free)*length;
+	glm::dmat2x2 rot_rake(cos(alpha_rake), -sin(alpha_rake), sin(alpha_rake), cos(alpha_rake));
+	glm::dmat2x2 rot_free(cos(alpha_free), -sin(alpha_free), sin(alpha_free), cos(alpha_free));
 
+	glm::dvec2 down(0., -1.);
+
+	glm::dvec2 trc = tr + down*rot_rake;
+	glm::dvec2 blc = bl + down*rot_free;
+
+	tool::line l1(tr,trc);
+	tool::line l2(bl,blc);
+
+	glm::dvec2 br = l1.intersect(l2);
 
 	construct_segments(std::vector<glm::dvec2>({tl, tr, br, bl}));
 }

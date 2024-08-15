@@ -97,7 +97,7 @@ int main(int argc, char * argv[]) {
 	opterr = 0;
 	int c;
 
-	int model = 3;
+	int model = 1;
 
 	while ((c = getopt (argc, argv, "n:r:m:h:d:")) != -1) {
 		switch (c)
