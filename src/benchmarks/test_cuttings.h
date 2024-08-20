@@ -67,6 +67,7 @@
 #include <iostream>
 #include <stdlib.h>
 #include <fenv.h>
+#include <fstream>
 #include <sys/time.h>
 #include <unistd.h>
 #include <sys/stat.h>

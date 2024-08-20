@@ -200,6 +200,7 @@
 	particle *particles  = new particle[nx*ny];
 
 	srand(0);
+	std::ofstream outfile("data.csv");  
 	unsigned int part_iter = 0;
 	for (unsigned int i = 0; i < nx; i++) {
 		for (unsigned int j = 0; j < ny; j++) {
@@ -211,7 +212,7 @@
 
 			particles[part_iter].X = px + lo_x;
 			particles[part_iter].Y = py + lo_y;
-
+			
 			part_iter++;
 		}
 	}
@@ -228,7 +229,8 @@
 		particles[i].fixed = (particles[i].y < lo_y + 0.5*dy) ? true : false;
 		particles[i].fixed = particles[i].fixed || (particles[i].x > hi_x - 0.5*dx);
 	}
-
+	
+	outfile.close();  
 	// correction constants
 	double alpha = 1.;
 	double beta  = 1.;

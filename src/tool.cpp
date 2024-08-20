@@ -253,7 +253,6 @@ std::vector<glm::dvec2> tool::construct_points_and_fillet(glm::dvec2 tl, glm::dv
 	glm::dvec2 trc = l1.closest_point(p);
 	glm::dvec2 blc = l2.closest_point(p);
 
-	double alpha = l1.angle_between_lines(l2);
 
 	// construct circle segment
 	double t1 = myatan2(trc.y - p.y, trc.x - p.x);

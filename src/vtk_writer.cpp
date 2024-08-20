@@ -65,7 +65,7 @@ void vtk_writer_write(const std::vector<particle> &particles, unsigned int step,
 	fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");		// Particle positions
 	fprintf(fp, "POINTS %d float\n", np);
 	for (unsigned int i = 0; i < np; i++) {
-		fprintf(fp, "%f %f %f\n", particles[i].x, particles[i].y, 0.);
+		fprintf(fp, "%f %f %f\n", particles[i].x*10e3, particles[i].y*10e3, 0.);
 	}
 	fprintf(fp, "\n");
 
@@ -86,7 +86,7 @@ void vtk_writer_write(const std::vector<particle> &particles, unsigned int step,
 	fprintf(fp, "SCALARS density float 1\n");		// Current particle density
 	fprintf(fp, "LOOKUP_TABLE default\n");
 	for (unsigned int i = 0; i < np; i++) {
-		fprintf(fp, "%f\n", particles[i].rho);
+		fprintf(fp, "%f\n", particles[i].rho*10e-9);
 	}
 	fprintf(fp, "\n");
 
@@ -106,7 +106,7 @@ void vtk_writer_write(const std::vector<particle> &particles, unsigned int step,
 		double szz = particles[i].Szz - particles[i].p;
 
 		double svm = sqrt(fabs((sxx*sxx + syy*syy + szz*szz) - sxx * syy - sxx * szz - syy * szz + 3.0 * (sxy*sxy)));
-		fprintf(fp, "%f\n", svm);
+		fprintf(fp, "%f\n", svm*10e-3);
 	}
 	fprintf(fp, "\n");
 
@@ -119,14 +119,14 @@ void vtk_writer_write(const std::vector<particle> &particles, unsigned int step,
 
 	fprintf(fp, "VECTORS velocity float\n");		// Particle velocities
 	for (unsigned int i = 0; i < np; i++) {
-		fprintf(fp, "%f %f %f\n", particles[i].vx, particles[i].vy, 0.);
+		fprintf(fp, "%f %f %f\n", particles[i].vx*10e3, particles[i].vy*10e3, 0.);
 	}
 	fprintf(fp, "\n");
 
 	fprintf(fp, "SCALARS glob_density_err double 1\n");  // global density error acc. to Feldman 2006
 	fprintf(fp, "LOOKUP_TABLE default\n");
 	for (unsigned int i = 0; i < np; i++) {
-		fprintf(fp, "%e\n", (particles[i].rho - particles[i].rho_init)*(particles[i].rho - particles[i].rho_init));
+		fprintf(fp, "%e\n", (particles[i].rho - particles[i].rho_init)*(particles[i].rho - particles[i].rho_init)*10e-9);
 	}
 	fprintf(fp, "\n");
 
@@ -162,7 +162,7 @@ void vtk_writer_write(const tool* tool, unsigned int step, const char *folder) {
         //triangles.push_back(triangle(segments[0].initial_vector, segments[1].initial_vector, segments[3].initial_vector));
         //triangles.push_back(triangle(segments[1].initial_vector, segments[2].initial_vector, segments[3].initial_vector));
         //triangles.push_back(triangle(segments[3].initial_vector, segments[4].initial_vector, segments[0].initial_vector));
-		const int num_discr = 40;
+		const int num_discr = 20;
 		auto fillet = tool->get_fillet();
 		//double t1 = fmin(fillet->t1, fillet->t2);
 		//double t2 = fmax(fillet->t1, fillet->t2);
@@ -173,7 +173,7 @@ void vtk_writer_write(const tool* tool, unsigned int step, const char *folder) {
         triangles.push_back(triangle(segments[0].initial_vector, segments[2].initial_vector, fillet->p));
         triangles.push_back(triangle(segments[0].initial_vector, fillet->p, segments[3].initial_vector));
 		triangles.push_back(triangle(segments[0].initial_vector, segments[3].initial_vector, segments[4].initial_vector));
-   
+
    		//double lo = t1 - 0.1*t1;
 		//std::cout <<;
 
@@ -181,7 +181,7 @@ void vtk_writer_write(const tool* tool, unsigned int step, const char *folder) {
 
 		double r = fillet->r;
 
-		for (int i = 0; i < num_discr-1; i++) {
+		for (int i = 0; i < num_discr; i++) {
 			double angle_1 = t2 + (i+0)*d_angle;
 			double angle_2 = t2 + (i+1)*d_angle;
 
@@ -206,9 +206,9 @@ void vtk_writer_write(const tool* tool, unsigned int step, const char *folder) {
 	fprintf(fp, "POINTS %d float\n", 3*num_tri);
 
 	for (auto it : triangles) {
-		fprintf(fp, "%f %f %f\n", it.p1.x, it.p1.y, 0.);
-		fprintf(fp, "%f %f %f\n", it.p2.x, it.p2.y, 0.);
-		fprintf(fp, "%f %f %f\n", it.p3.x, it.p3.y, 0.);
+		fprintf(fp, "%f %f %f\n", it.p1.x*10e3, it.p1.y*10e3, 0.);
+		fprintf(fp, "%f %f %f\n", it.p2.x*10e3, it.p2.y*10e3, 0.);
+		fprintf(fp, "%f %f %f\n", it.p3.x*10e3, it.p3.y*10e3, 0.);
 	}
 	fprintf(fp, "\n");
 

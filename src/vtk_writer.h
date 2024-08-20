@@ -61,6 +61,8 @@
 // output to vtk legacy format
 // please see: https://www.google.com/search?q=paraview
 
+// TODO: implementar função para transformar unidades de m para mm.
+
 void vtk_writer_write(const std::vector<particle> &particles, unsigned int step, const char *folder = "results");
 void vtk_writer_write(const tool* tool, unsigned int step, const char *folder);
 
